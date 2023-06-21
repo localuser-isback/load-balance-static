@@ -3,6 +3,7 @@ const numCPUs = require('os').cpus().length;
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const pidusage = require('pidusage');
 
 // Check if the current process is the master process
 if (cluster.isMaster) {
@@ -28,20 +29,26 @@ if (cluster.isMaster) {
     const workers = Object.values(cluster.workers);
     const firstCoreWorker = workers[0];
     if (firstCoreWorker && firstCoreWorker.process) {
-      const cpuUsage = firstCoreWorker.process.cpuUsage();
-      const totalUsage = cpuUsage.user + cpuUsage.system;
-      const loadPercentage = (totalUsage / 1000000) * 100; // Convert to percentage
-      firstCoreLoad = loadPercentage;
+      pidusage.stat(firstCoreWorker.process.pid, (err, stats) => {
+        if (err) {
+          console.error(err);
+          return;
+        }
 
-      // Check if the second core worker needs to be stopped or started
-      if (firstCoreLoad >= 90 && !secondCoreWorker) {
-        secondCoreWorker = cluster.fork();
-        console.log('Second core worker started');
-      } else if (firstCoreLoad < 90 && secondCoreWorker) {
-        secondCoreWorker.kill();
-        secondCoreWorker = null;
-        console.log('Second core worker stopped');
-      }
+        const totalUsage = stats.cpu;
+        const loadPercentage = (totalUsage / numCPUs) * 100; // Convert to percentage
+        firstCoreLoad = loadPercentage;
+
+        // Check if the second core worker needs to be stopped or started
+        if (firstCoreLoad >= 90 && !secondCoreWorker) {
+          secondCoreWorker = cluster.fork();
+          console.log('Second core worker started');
+        } else if (firstCoreLoad < 90 && secondCoreWorker) {
+          secondCoreWorker.kill();
+          secondCoreWorker = null;
+          console.log('Second core worker stopped');
+        }
+      });
     }
   }, 1000);
 } else {
@@ -61,7 +68,7 @@ if (cluster.isMaster) {
 
         const modifiedData = data.replace(
           '<head>',
-          `<head><link rel="stylesheet" href="style.css">`
+          `<head><link rel="stylesheet" href="/style.css">`
         );
         res.send(modifiedData);
       });
