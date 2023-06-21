@@ -3,7 +3,7 @@ const numCPUs = require('os').cpus().length;
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const pidusage = require('pidusage');
+const osUtils = require('os-utils');
 
 // Check if the current process is the master process
 if (cluster.isMaster) {
@@ -29,15 +29,9 @@ if (cluster.isMaster) {
     const workers = Object.values(cluster.workers);
     const firstCoreWorker = workers[0];
     if (firstCoreWorker && firstCoreWorker.process) {
-      pidusage.stat(firstCoreWorker.process.pid, (err, stats) => {
-        if (err) {
-          console.error(err);
-          return;
-        }
-
-        const totalUsage = stats.cpu;
-        const loadPercentage = (totalUsage / numCPUs) * 100; // Convert to percentage
-        firstCoreLoad = loadPercentage;
+      osUtils.cpuUsage((usage) => {
+        const totalUsage = usage * 100; // Convert to percentage
+        firstCoreLoad = totalUsage;
 
         // Check if the second core worker needs to be stopped or started
         if (firstCoreLoad >= 90 && !secondCoreWorker) {
